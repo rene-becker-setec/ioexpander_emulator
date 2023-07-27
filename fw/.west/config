@@ -1,0 +1,11 @@
+[build]
+board = nrf52840dk_nrf52840
+
+[manifest]
+path = app
+file = west.yml
+
+[zephyr]
+base = zephyr
+
+
