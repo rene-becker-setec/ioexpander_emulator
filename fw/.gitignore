@@ -1,4 +1,5 @@
-bootloader
-build
-modules
-zephyr
+/bootloader
+/build
+/modules
+/zephyr
+/erpc

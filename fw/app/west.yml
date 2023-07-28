@@ -2,6 +2,8 @@ manifest:
   remotes:
     - name: zephyrproject-rtos
       url-base: https://github.com/zephyrproject-rtos
+    - name: EmbeddedRPC
+      url-base: https://github.com/EmbeddedRPC
   projects:
     - name: zephyr
       remote: zephyrproject-rtos
@@ -9,7 +11,7 @@ manifest:
       import:
         name-allowlist:
           - cmsis
-          - hal_nordic  
+          - hal_nordic
           - mbedtls
           - mcuboot
           - mcumgr
@@ -18,5 +20,10 @@ manifest:
           - tinycbor
           - tinycrypt
           - zcbor
+
+    - name: erpc
+      remote: EmbeddedRPC
+      revision: 1.10.0
+
   self:
     path: app
