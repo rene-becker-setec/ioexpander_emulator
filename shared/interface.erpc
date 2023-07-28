@@ -16,3 +16,4 @@ interface IoExpanderEmulator {
 @group("emu2pc")
 interface IoExpanderEmulatorAsync {
   oneway canMsgRcvd(binary canMsg)
+}

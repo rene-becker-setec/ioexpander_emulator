@@ -1,11 +1,11 @@
 # IO Expander Emulator
 
-## Building
+
+
+## Building the Firmware
 
 ```bash
+cd fw
+erpcgen -o app/generated ../shared/interface.erpc
 west build -s app
 ```
-
-## UART Multiplexer on PC
-
-https://github.com/lvzon/gsmmux
