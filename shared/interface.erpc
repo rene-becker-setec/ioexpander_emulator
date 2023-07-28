@@ -1,0 +1,18 @@
+/*! Define the project name, which is also the prefix of all generated source code files */
+program ioxp
+
+// Note that by using @group() the interfaces can be split over different files when
+// generating. This way we on the Emulator side can only include the 'pc2emu' files when
+// building which means we don't have to implement server method 'canMsgRcvd()' on the
+// emulator.
+
+//! Calls PC -> IoExpanderEmulator
+@group("pc2emu")
+interface IoExpanderEmulator {
+    sendCanMsg(binary txInput) -> binary
+}
+
+// Asynchronous events IoExpanderEmulator -> PC
+@group("emu2pc")
+interface IoExpanderEmulatorAsync {
+  oneway canMsgRcvd(binary canMsg)

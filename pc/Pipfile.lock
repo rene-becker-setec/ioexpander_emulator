@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "577bf01a5ee652cbe1736b1f04d4258e2ec8775ac90c78bc5bd0e551ed1f9f9a"
+            "sha256": "88044252689c7dc89d95a2f170b03c8e8022450ff5353869a5d9ad14efb2dc7c"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,6 +16,14 @@
         ]
     },
     "default": {
+        "erpc": {
+            "hashes": [
+                "sha256:503e54f158598239b3b3284742a26c63fb9358be45133aa0a874a00ac52300df",
+                "sha256:a02831cf047c5c155b4ed440e65eadfe1512ce43dc4ec8e41deb12779e9d1070"
+            ],
+            "index": "pypi",
+            "version": "==1.10.0"
+        },
         "pyserial": {
             "hashes": [
                 "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb",

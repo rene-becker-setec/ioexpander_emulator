@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 pyserial = "*"
+erpc = "1.10.0"
 
 [dev-packages]
 
