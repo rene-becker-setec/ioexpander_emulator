@@ -56,6 +56,8 @@
 #define ERPC_PRE_POST_ACTION_DEFAULT_ENABLED (1U)  //!< Pre post shim default callback functions enabled.
 //@}
 
+#define ERPC_THREADS ERPC_THREADS_ZEPHYR
+
 //! @name Configuration options
 //@{
 

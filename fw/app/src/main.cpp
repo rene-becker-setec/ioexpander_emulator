@@ -14,18 +14,12 @@
 #include <zephyr/usb/class/usb_hid.h>
 #include <zephyr/usb/class/usb_cdc.h>
 
+#include <erpc_server_setup.h>
+#include <erpc_arbitrated_client_setup.h>
+#include "erpc_zephyr_usb_cdc_transport.hpp"
+
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
-
-
-#define MOUSE_BTN_REPORT_POS	0
-#define MOUSE_X_REPORT_POS	1
-#define MOUSE_Y_REPORT_POS	2
-
-#define MOUSE_BTN_LEFT		BIT(0)
-#define MOUSE_BTN_RIGHT		BIT(1)
-#define MOUSE_BTN_MIDDLE	BIT(2)
-
 
 #define WELCOME_MSG "Welcome ..."
 
@@ -162,6 +156,15 @@ int main(void)
 
 	uart_irq_rx_enable(cdc_dev[0]);
 	uart_irq_rx_enable(cdc_dev[1]);
+
+	erpc_transport_t arbitrated_transport;
+	erpc_transport_t transport = reinterpret_cast<erpc_transport_t>(
+		new erpc::ZephyrUsbCdcTransport(cdc_dev[0])
+	);
+	erpc_mbf_t message_buffer_factory = erpc_mbf_dynamic_init();
+
+	erpc_client_t client = erpc_arbitrated_client_init(transport, message_buffer_factory, &arbitrated_transport);
+	
 
 	while (true) {
 		k_sleep(K_MSEC(100));

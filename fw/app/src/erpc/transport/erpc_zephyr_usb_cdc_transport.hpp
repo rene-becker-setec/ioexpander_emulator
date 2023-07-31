@@ -4,8 +4,8 @@
 
 namespace erpc {
 
-    class ZephyrUsbCdcTransport : public FramedTransport
-
+class ZephyrUsbCdcTransport : public FramedTransport
+{
 public:
     /*!
      * @brief Constructor.
@@ -42,4 +42,5 @@ private:
      */
     virtual erpc_status_t underlyingSend(const uint8_t *data, uint32_t size);
 
-}
+};
+} // namespace erpc
