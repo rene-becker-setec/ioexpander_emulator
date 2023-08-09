@@ -22,6 +22,7 @@ target_sources(app PRIVATE
     ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/infra/erpc_client_manager.cpp
     ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/setup/erpc_setup_mbf_dynamic.cpp
     ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/setup/erpc_arbitrated_client_setup.cpp
+    ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/setup/erpc_server_setup.cpp
 )
 
 target_include_directories(app PRIVATE

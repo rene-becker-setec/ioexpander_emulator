@@ -14,9 +14,13 @@
 #include <zephyr/usb/class/usb_hid.h>
 #include <zephyr/usb/class/usb_cdc.h>
 
+#include <string>
+#include "ioxp_pc2emu_server.h"
 #include <erpc_server_setup.h>
 #include <erpc_arbitrated_client_setup.h>
 #include "erpc_zephyr_usb_cdc_transport.hpp"
+
+using namespace std;
 
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
@@ -24,6 +28,15 @@ LOG_MODULE_REGISTER(main);
 static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
 	LOG_INF("Status %d", status);
+}
+
+binary_t * sendCanMsg(const binary_t * txInput){
+	LOG_INF("sendCanMsg called");
+	string o ((char*)txInput->data);
+	auto ol = strlen(o.c_str());
+	char* buf = (char*)k_malloc(ol + 1);
+	strncpy(buf,o.c_str(),ol);
+	return new binary_t{(uint8_t*)buf,(uint32_t)ol};
 }
 
 int main(void)
@@ -70,7 +83,11 @@ int main(void)
 	erpc_client_t client = erpc_arbitrated_client_init(transport, message_buffer_factory, &arbitrated_transport);
 
 	LOG_INF("Setting up server ...");
-//	auto server = erpc_server_init(arbitrated_transport, message_buffer_factory);
+	auto server = erpc_server_init(arbitrated_transport, message_buffer_factory);
+
+	LOG_INF("Adding service to server ... ");
+	erpc_add_service_to_server(server, create_IoExpanderEmulator_service());
+
 
 	while (true) {
 		k_sleep(K_MSEC(100));
