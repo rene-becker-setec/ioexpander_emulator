@@ -156,7 +156,7 @@ public:
 #elif ERPC_THREADS_IS(FREERTOS)
         return reinterpret_cast<thread_id_t>(m_task);
 #elif ERPC_THREADS_IS(ZEPHYR)
-        return reinterpret_cast<thread_id_t>(m_thread);
+        return reinterpret_cast<thread_id_t>(const_cast<k_thread*>(&m_thread));
 #elif ERPC_THREADS_IS(MBED)
         return reinterpret_cast<thread_id_t>(m_thread->get_id());
 #elif ERPC_THREADS_IS(WIN32)
@@ -282,7 +282,7 @@ private:
      * @param[in] arg2
      * @param[in] arg3
      */
-    static void *threadEntryPointStub(void *arg1, void *arg2, void *arg3);
+    static void threadEntryPointStub(void *arg1, void *arg2, void *arg3);
 
 #elif ERPC_THREADS_IS(MBED)
 

@@ -19,12 +19,12 @@ using namespace erpc;
 
 Thread::Thread(const char *name)
 : m_name(name)
-, m_entry(0)
-, m_arg(0)
-, m_stackSize(0)
-, m_priority(0)
-, m_thread(0)
-, m_stack(0)
+//, m_entry(0)
+//, m_arg(0)
+//, m_stackSize(0)
+//, m_priority(0)
+//, m_thread(0)
+//, m_stack(0)
 {
 }
 
@@ -35,7 +35,7 @@ Thread::Thread(thread_entry_t entry, uint32_t priority, uint32_t stackSize, cons
 , m_arg(0)
 , m_stackSize(stackSize)
 , m_priority(priority)
-, m_thread(0)
+//, m_thread(0)
 , m_stack(0)
 {
 }
@@ -60,7 +60,7 @@ void Thread::start(void *arg)
 
 bool Thread::operator==(Thread &o)
 {
-    return m_thread == o.m_thread;
+    return &m_thread == &(o.m_thread);
 }
 
 Thread *Thread::getCurrentThread(void)
@@ -70,7 +70,7 @@ Thread *Thread::getCurrentThread(void)
 
 void Thread::sleep(uint32_t usecs)
 {
-    k_sleep(usecs / 1000);
+    k_sleep(K_USEC(usecs));
 }
 
 void Thread::threadEntryPoint(void)
@@ -81,7 +81,7 @@ void Thread::threadEntryPoint(void)
     }
 }
 
-void *Thread::threadEntryPointStub(void *arg1, void *arg2, void *arg3)
+void Thread::threadEntryPointStub(void *arg1, void *arg2, void *arg3)
 {
     Thread *_this = reinterpret_cast<Thread *>(arg1);
     erpc_assert((_this != NULL) && ("Reinterpreting 'void *arg1' to 'Thread *' failed." != NULL));
@@ -93,7 +93,6 @@ void *Thread::threadEntryPointStub(void *arg1, void *arg2, void *arg3)
 }
 
 Mutex::Mutex(void)
-: m_mutex(0)
 {
     k_mutex_init(&m_mutex);
 }
@@ -117,7 +116,6 @@ bool Mutex::unlock(void)
 }
 
 Semaphore::Semaphore(int count)
-: m_sem(0)
 {
     // Set max count to highest signed int.
     k_sem_init(&m_sem, count, 0x7fffffff);
@@ -144,12 +142,12 @@ bool Semaphore::get(uint32_t timeoutUsecs)
         }
     }
 
-    return (k_sem_take(&m_sem, timeoutUsecs) == 0);
+    return (k_sem_take(&m_sem, K_USEC(timeoutUsecs)) == 0);
 }
 
 int Semaphore::getCount(void) const
 {
-    return k_sem_count_get(m_sem);
+    return k_sem_count_get(const_cast<struct k_sem*>(&m_sem));
 }
 #endif /* ERPC_THREADS_IS(ZEPHYR) */
 
