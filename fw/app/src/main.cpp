@@ -21,84 +21,10 @@
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
 
-#define WELCOME_MSG "Welcome ..."
-
-/* CDC ACM */
-
-static volatile bool data_transmitted;
-static volatile bool data_arrived;
-
-static void write_data(const struct device *dev, const char *buf, int len)
-{
-	uart_irq_tx_enable(dev);
-
-	while (len) {
-		int written;
-
-		data_transmitted = false;
-		written = uart_fifo_fill(dev, (const uint8_t *)buf, len);
-		while (data_transmitted == false) {
-			k_yield();
-		}
-
-		len -= written;
-		buf += written;
-	}
-
-	uart_irq_tx_disable(dev);
-}
-
-static void cdc_0_int_handler(const struct device *dev, void *user_data)
-{
-	ARG_UNUSED(user_data);
-
-	uart_irq_update(dev);
-
-	if (uart_irq_tx_ready(dev)) {
-		data_transmitted = true;
-	}
-
-	if (!uart_irq_rx_ready(dev)) {
-		return;
-	}
-	uint32_t bytes_read;
-	uint8_t rx_buffer;
-
-	while ((bytes_read = uart_fifo_read(dev, &rx_buffer, 1))) {
-		LOG_INF("char received on CDC0: 0x%02x (%c)", rx_buffer, (char) rx_buffer);
-	}
-
-}
-
-static void cdc_1_int_handler(const struct device *dev, void *user_data)
-{
-	ARG_UNUSED(user_data);
-
-	uart_irq_update(dev);
-
-	if (uart_irq_tx_ready(dev)) {
-		data_transmitted = true;
-	}
-
-	if (!uart_irq_rx_ready(dev)) {
-		return;
-	}
-	uint32_t bytes_read;
-	uint8_t rx_buffer;
-
-	while ((bytes_read = uart_fifo_read(dev, &rx_buffer,1))) {
-		LOG_INF("char received on CDC1: 0x%02x (%c)", rx_buffer, (char) rx_buffer);
-	}
-}
-
-/* Devices */
-
 static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
 	LOG_INF("Status %d", status);
 }
-
-#define DEVICE_AND_COMMA(node_id) DEVICE_DT_GET(node_id),
 
 int main(void)
 {
@@ -134,12 +60,6 @@ int main(void)
 	/* Wait 1 sec for the host to do all settings */
 	k_busy_wait(USEC_PER_SEC);
 
-	uart_irq_callback_set(cdc_dev, cdc_0_int_handler);
-
-	write_data(cdc_dev, WELCOME_MSG, strlen(WELCOME_MSG));
-	write_data(cdc_dev, cdc_dev->name, strlen(cdc_dev->name));
-
-	uart_irq_rx_enable(cdc_dev);
 
 	erpc_transport_t arbitrated_transport;
 	erpc_transport_t transport = reinterpret_cast<erpc_transport_t>(
@@ -149,6 +69,8 @@ int main(void)
 
 	erpc_client_t client = erpc_arbitrated_client_init(transport, message_buffer_factory, &arbitrated_transport);
 
+	LOG_INF("Setting up server ...");
+//	auto server = erpc_server_init(arbitrated_transport, message_buffer_factory);
 
 	while (true) {
 		k_sleep(K_MSEC(100));
