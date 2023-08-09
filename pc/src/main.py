@@ -33,9 +33,33 @@ if __name__ == '__main__':
         sharedTransport=xport, codec=erpc.basic_codec.BasicCodec()
     )
 
+    ############################################################################
+    #
+    # Server for Emulator -> PC Communication
+    #
+    ############################################################################
+
+
+    class Emu2PcHandler(emu2pc.interface.IIoExpanderEmulatorAsync):
+
+        def canMsgRcvd(self, canMsg):
+            LOGGER.info(f'CAN Message received {canMsg}')
+
+
+    handler = Emu2PcHandler()
+    service = emu2pc.server.IoExpanderEmulatorAsyncService(handler)
+    server = erpc.simple_server.ServerThread(arbitrator, erpc.basic_codec.BasicCodec)
+    server.add_service(service)
+
+    LOGGER.info('Starting Server ...')
+    server.start()
+
+    ##############################################################################
     #
     # Client for PC -> Emulator Communication
     #
+    ##############################################################################
+
     LOGGER.info('Starting up client ...')
 
     client_mngr = erpc.client.ClientManager(xport, erpc.basic_codec.BasicCodec)
