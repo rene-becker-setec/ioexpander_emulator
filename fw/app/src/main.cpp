@@ -88,6 +88,8 @@ int main(void)
 	LOG_INF("Adding service to server ... ");
 	erpc_add_service_to_server(server, create_IoExpanderEmulator_service());
 
+	LOG_INF("Starting server ...");
+	erpc_server_run(server);
 
 	while (true) {
 		k_sleep(K_MSEC(100));

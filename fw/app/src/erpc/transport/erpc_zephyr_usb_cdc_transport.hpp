@@ -21,6 +21,9 @@ public:
     virtual ~ZephyrUsbCdcTransport(void);
 
 private:
+
+    const struct device *cdc_dev;
+
     /*!
      * @brief Receive data from UART peripheral.
      *
