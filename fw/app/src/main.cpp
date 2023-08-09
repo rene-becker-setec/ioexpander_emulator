@@ -102,19 +102,15 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 
 int main(void)
 {
-	const struct device *cdc_dev[] = {
-		DT_FOREACH_STATUS_OKAY(zephyr_cdc_acm_uart, DEVICE_AND_COMMA)
-	};
-	BUILD_ASSERT(ARRAY_SIZE(cdc_dev) >= 2, "Not enough CDC ACM instances");
 	uint32_t dtr = 0U;
 	int ret;
 
-	for (int idx = 0; idx < ARRAY_SIZE(cdc_dev); idx++) {
-		if (!device_is_ready(cdc_dev[idx])) {
-			LOG_ERR("CDC ACM device %s is not ready",
-				cdc_dev[idx]->name);
-			return 0;
-		}
+	const struct device *cdc_dev;
+	cdc_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+
+	if (!device_is_ready(cdc_dev)) {
+		LOG_ERR("CDC ACM device not ready");
+		return 0;
 	}
 
 	ret = usb_enable(status_cb);
@@ -124,47 +120,35 @@ int main(void)
 	}
 
 	/* Initialize CDC ACM */
-	for (int idx = 0; idx < ARRAY_SIZE(cdc_dev); idx++) {
-		LOG_INF("Wait for DTR on %s", cdc_dev[idx]->name);
-		while (1) {
-			uart_line_ctrl_get(cdc_dev[idx],
-					   UART_LINE_CTRL_DTR,
-					   &dtr);
-			if (dtr) {
-				break;
-			} else {
-				/* Give CPU resources to low priority threads. */
-				k_sleep(K_MSEC(100));
-			}
+	while (true) {
+		uart_line_ctrl_get(cdc_dev, UART_LINE_CTRL_DTR, &dtr);
+		if (dtr) {
+			break;
+		} else {
+			/* Give CPU resources to low priority threads. */
+			k_sleep(K_MSEC(100));
 		}
-
-		LOG_INF("DTR on device %s", cdc_dev[idx]->name);
 	}
-
 
 	LOG_INF("Waiting for 1s");
 	/* Wait 1 sec for the host to do all settings */
 	k_busy_wait(USEC_PER_SEC);
 
-	uart_irq_callback_set(cdc_dev[0], cdc_0_int_handler);
-	uart_irq_callback_set(cdc_dev[1], cdc_1_int_handler);
+	uart_irq_callback_set(cdc_dev, cdc_0_int_handler);
 
-	write_data(cdc_dev[0], WELCOME_MSG, strlen(WELCOME_MSG));
-	write_data(cdc_dev[0], cdc_dev[0]->name, strlen(cdc_dev[0]->name));
-	write_data(cdc_dev[1], WELCOME_MSG, strlen(WELCOME_MSG));
-	write_data(cdc_dev[1], cdc_dev[1]->name, strlen(cdc_dev[1]->name));
+	write_data(cdc_dev, WELCOME_MSG, strlen(WELCOME_MSG));
+	write_data(cdc_dev, cdc_dev->name, strlen(cdc_dev->name));
 
-	uart_irq_rx_enable(cdc_dev[0]);
-	uart_irq_rx_enable(cdc_dev[1]);
+	uart_irq_rx_enable(cdc_dev);
 
 	erpc_transport_t arbitrated_transport;
 	erpc_transport_t transport = reinterpret_cast<erpc_transport_t>(
-		new erpc::ZephyrUsbCdcTransport(cdc_dev[0])
+		new erpc::ZephyrUsbCdcTransport(cdc_dev)
 	);
 	erpc_mbf_t message_buffer_factory = erpc_mbf_dynamic_init();
 
 	erpc_client_t client = erpc_arbitrated_client_init(transport, message_buffer_factory, &arbitrated_transport);
-	
+
 
 	while (true) {
 		k_sleep(K_MSEC(100));
