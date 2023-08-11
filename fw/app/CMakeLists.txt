@@ -6,6 +6,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(ioxp_emu)
 
 target_sources(app PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/ipi.c
     ${PROJECT_SOURCE_DIR}/src/main.cpp
     ${PROJECT_SOURCE_DIR}/src/erpc/port/erpc_port_zephyr.cpp
     ${PROJECT_SOURCE_DIR}/src/erpc/port/erpc_threading_zephyr.cpp
