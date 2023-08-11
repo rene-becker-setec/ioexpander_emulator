@@ -69,20 +69,24 @@ static void client_thread(void*, void*, void*) {
  ***********************************************************************************************/
 
 binary_t * sendCanMsg(const binary_t * txInput){
-	LOG_INF("sendCanMsg called");
+	LOG_DBG("sendCanMsg called");
 	char temp_buff[256];
 	char* wp = temp_buff;
 	char* ep = wp + sizeof(temp_buff);
 	wp = wp + snprintf(wp, ep - wp,"received:");
 	for(uint8_t i=0; i < txInput->dataLength; i++){
-		LOG_INF("-> %02x", txInput->data[i]);
 		wp = wp + snprintf(wp, ep - wp,"0x%02x ", txInput->data[i]);
 	}
 	*wp = '\0';
 	auto ol = strlen((const char*) temp_buff);
 	char* buf = (char*)k_malloc(ol + 1);
-	strncpy(buf, (const char*) temp_buff, ol);
-	return new binary_t{(uint8_t*)buf,(uint32_t)ol};
+	if (buf == NULL) {
+		LOG_ERR("k_malloc failed");
+		return new binary_t{(uint8_t*) NULL,(uint32_t) 0};
+	} else {
+		strncpy(buf, (const char*) temp_buff, ol);
+		return new binary_t{(uint8_t*)buf,(uint32_t)ol};
+	}
 }
 
 int main(void)

@@ -5,7 +5,7 @@
 
 #define WELCOME_MSG "Welcome ..."
 
-#define LOG_LEVEL LOG_LEVEL_DBG
+#define LOG_LEVEL LOG_LEVEL_INF
 LOG_MODULE_REGISTER(erpcxprt);
 
 using namespace erpc;
@@ -128,7 +128,7 @@ erpc_status_t ZephyrUsbCdcTransport::underlyingReceive(uint8_t *data, uint32_t s
 {
     size_t num_bytes_read;
     char debug_buffer[256];
-    
+
     k_pipe_get(&rx_data_pipe,(void*) data, size, &num_bytes_read, size, K_FOREVER);
 
     memset(debug_buffer, 0, sizeof(debug_buffer));
