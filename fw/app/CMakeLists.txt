@@ -11,6 +11,7 @@ target_sources(app PRIVATE
     ${PROJECT_SOURCE_DIR}/src/erpc/port/erpc_threading_zephyr.cpp
     ${PROJECT_SOURCE_DIR}/src/erpc/transport/erpc_zephyr_usb_cdc_transport.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/erpcgen/ioxp_pc2emu_server.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/erpcgen/ioxp_emu2pc_client.cpp
     ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/infra/erpc_server.cpp
     ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/infra/erpc_framed_transport.cpp
     ${PROJECT_SOURCE_DIR}/../erpc/erpc_c/infra/erpc_crc16.cpp
@@ -38,5 +39,6 @@ target_include_directories(app PRIVATE
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/erpcgen/ioxp_pc2emu_server.cpp
+           ${CMAKE_CURRENT_BINARY_DIR}/erpcgen/ioxp_emu2pc_client.cpp
     COMMAND erpcgen -o ${CMAKE_CURRENT_BINARY_DIR}/erpcgen ${PROJECT_SOURCE_DIR}/../../shared/interface.erpc
 )

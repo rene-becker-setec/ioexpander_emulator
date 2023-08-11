@@ -16,6 +16,7 @@
 
 #include <string>
 #include "ioxp_pc2emu_server.h"
+#include "ioxp_emu2pc.h"
 #include <erpc_server_setup.h>
 #include <erpc_arbitrated_client_setup.h>
 #include "erpc_zephyr_usb_cdc_transport.hpp"
@@ -25,10 +26,47 @@ using namespace std;
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
 
+static bool host_connected = true;
+
 static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
 	LOG_INF("Status %d", status);
 }
+
+
+/************************************************************************************************
+ * Client thread function ...
+ ***********************************************************************************************/
+struct k_thread client_thread_data;
+K_THREAD_STACK_DEFINE(client_thread_stack, 2048);
+
+static void client_thread(void*, void*, void*) {
+
+	uint32_t num_msg_sent = 0;
+
+	while (true) {
+		k_sleep(K_SECONDS(1));
+
+		LOG_INF("client thread running ...");
+
+		if (host_connected) {
+			char msg[100] = {0};
+			snprintf(msg, sizeof(msg), "CAN Message Received %d", num_msg_sent);
+			binary_t b = {(uint8_t*)msg,(uint32_t)strlen(msg)};
+			/* RPC call */
+			canMsgRcvd(&b);
+			LOG_INF("send CAN Notification ...");
+			num_msg_sent++;
+		} else {
+			LOG_INF("remote not connected ...");
+		}
+	}
+}
+
+
+/************************************************************************************************
+ * Server Methods ...
+ ***********************************************************************************************/
 
 binary_t * sendCanMsg(const binary_t * txInput){
 	LOG_INF("sendCanMsg called");
@@ -96,8 +134,19 @@ int main(void)
 	LOG_INF("Adding service to server ... ");
 	erpc_add_service_to_server(server, create_IoExpanderEmulator_service());
 
+	LOG_INF("Starting Client Thread");
+	k_thread_create(
+		&client_thread_data,
+		client_thread_stack,
+		K_THREAD_STACK_SIZEOF(client_thread_stack),
+		client_thread, NULL, NULL, NULL,
+		2, 0, K_NO_WAIT
+	);
+
 	LOG_INF("Starting server ...");
 	erpc_server_run(server);
+
+	// shouuld never get here ....
 
 	while (true) {
 		k_sleep(K_MSEC(100));
