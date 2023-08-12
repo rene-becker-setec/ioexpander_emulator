@@ -18,7 +18,7 @@ int ipi_init(void);
  *
  * @return int
  */
-int ipe_queue_can_msg(void);
+int ipe_send_can_msg(void);
 
 #ifdef __cplusplus
 }
