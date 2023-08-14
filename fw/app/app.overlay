@@ -10,3 +10,47 @@
 	};
 
 };
+
+&pinctrl {
+
+	spi0_default: spi0_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 27)>, 
+			<NRF_PSEL(SPIS_MOSI, 0, 16)>,
+			<NRF_PSEL(SPIS_MISO, 0, 14)>,
+			<NRF_PSEL(SPIS_CSN, 0, 26)>;
+
+		};
+	};
+
+	spi0_sleep: spi0_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 27)>, 
+			<NRF_PSEL(SPIS_MOSI, 0, 16)>,
+			<NRF_PSEL(SPIS_MISO, 0, 14)>,
+			<NRF_PSEL(SPIS_CSN, 0, 26)>;
+			low-power-enable;
+		};
+	};
+};
+
+// I2C0 is enabled in the board DTS, but SPI0 cannot be used
+// at the same time. Thus we override the status to 'disabled' here
+&i2c0 {
+	status = "disabled";
+};
+
+&spi0 {
+	compatible = "nordic,nrf-spis";
+	status = "okay";
+
+	def-char = <0xFF>;
+
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-1 = <&spi0_sleep>;
+	pinctrl-names = "default", "sleep";	
+};
+
+
+
+
