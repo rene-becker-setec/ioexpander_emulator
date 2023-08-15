@@ -12,7 +12,10 @@
             "type": "cortex-debug",
             "runToEntryPoint": "main",
             "servertype": "jlink",
-            "device": "nrf52"
+            "device": "nrf52",
+            "armToolchainPath": "/home/rene/zephyr-sdk-0.16.0/arm-zephyr-eabi/bin",
+            "gdbPath": "/home/rene/zephyr-sdk-0.16.0/arm-zephyr-eabi/bin/arm-zephyr-eabi-gdb",
+            "svdFile": "./modules/hal/nordic/nrfx/mdk/nrf52840.svd"
         }
     ]
 }
