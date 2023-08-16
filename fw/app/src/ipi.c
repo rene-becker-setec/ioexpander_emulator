@@ -2,13 +2,18 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/spi.h>
 #include <string.h>
 #include <stdio.h>
 #include "ioxp_emu2pc.h"
 
+#include "rvmn_spi.h"
+
 #define GPIO_NAME "GPIO_0"
 
 #define MY_GPIO DT_NODELABEL(gpio0)
+
+#define SPI_DMA_OP_CNT 1U
 
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(ipi);
@@ -19,10 +24,36 @@ K_THREAD_STACK_DEFINE(ipi_thread_stack, 2048);
 
 K_TIMER_DEFINE(ipi_timer, NULL, NULL);
 K_MUTEX_DEFINE(ipi_mutex);
+K_SEM_DEFINE(ipi_sem, 0, 1);
 
-const struct device *ipi_spi_dev;
-const struct device *gpio_dev = DEVICE_DT_GET(MY_GPIO);
+const struct device *ipi_spi_dev = DEVICE_DT_GET(DT_NODELABEL(spi0));
+const struct device *gpio_dev = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
+static void spi_callback(const struct device *dev, int result, void *data){
+	if (result != 0) {
+		LOG_ERR("SPI Transaction failed (result code: 0x%04x)", result);
+	}
+	return;
+}
+
+static struct spi_config ipi_spi_config;
+struct SPIS_tuMOSI spi_rx_buf;
+struct SPIS_tuMISO spi_tx_buf;
+static const struct spi_buf spi_tx_buf_pack[SPI_DMA_OP_CNT] = {
+        {.buf = spi_tx_buf.spi_dma_block, .len = SPI_TRANSFER_SIZE},
+};
+static const struct spi_buf spi_rx_buf_pack[SPI_DMA_OP_CNT] = {
+        {.buf = spi_rx_buf.spi_dma_block, .len = SPI_TRANSFER_SIZE},
+};
+
+static const struct spi_buf_set spi_tx_buf_set_pack = {
+        .buffers = spi_tx_buf_pack,
+        .count = SPI_DMA_OP_CNT,  /* must be set to 1 otherwise the Nordic SPI driver will reject it  */
+};
+static const struct spi_buf_set spi_rx_buf_set_pack = {
+        .buffers = spi_rx_buf_pack,
+        .count = SPI_DMA_OP_CNT,  /* must be set to 1 otherwise the Nordic SPI driver will reject it  */
+};
 
 static void ipi_thread_func(void*, void*, void*) {
 
@@ -68,16 +99,24 @@ static void ipi_thread_func(void*, void*, void*) {
 
 		// run SPI transaction
 		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the
-		// master that we are ready to receive. So therefore we set SPI_ready and then run
-		// spi_transceive()
+		// master that we are ready to receive (The master MCU is looking for a falling edge).
+		// So therefore we set up the SPI Slave (async mode) and then set SPI_ready
 		LOG_DBG("activating P0.4");
-		gpio_pin_set(gpio_dev, 4, 1);
+//		spi_transceive_cb(
+//			ipi_spi_dev,
+//			&ipi_spi_config,       // const struct spi_config *config,
+//			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
+//			&spi_rx_buf_set_pack,  // const struct spi_buf_set *rx_bufs,
+//			&spi_callback,         // spi_callback_t callback,
+//			NULL                   // void *userdata
+//		);
+		gpio_pin_set(gpio_dev, 4, 0);
 
-		k_sleep(K_MSEC(500));
+		k_sleep(K_MSEC(5));
 
 		// after reception is complete reset the SPI_ready signal
 		LOG_DBG("de-activating P0.4");
-		gpio_pin_set(gpio_dev, 4, 0);
+		gpio_pin_set(gpio_dev, 4, 1);
 
 		// process the newly received data ...
 		// for digital and analog inputs we compare the previous with the newly received
