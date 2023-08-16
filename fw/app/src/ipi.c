@@ -18,32 +18,33 @@
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(ipi);
 
-struct k_thread ipi_thread_data;
-K_THREAD_STACK_DEFINE(ipi_thread_stack, 2048);
-
-
-K_TIMER_DEFINE(ipi_timer, NULL, NULL);
-K_MUTEX_DEFINE(ipi_mutex);
-K_SEM_DEFINE(ipi_sem, 0, 1);
-
 const struct device *ipi_spi_dev = DEVICE_DT_GET(DT_NODELABEL(spi0));
 const struct device *gpio_dev = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
-static void spi_callback(const struct device *dev, int result, void *data){
-	if (result != 0) {
-		LOG_ERR("SPI Transaction failed (result code: 0x%04x)", result);
-	}
-	return;
+struct k_thread ipi_transceive_thread_data;
+K_THREAD_STACK_DEFINE(ipi_transceive_thread_stack, 2048);
+
+struct k_thread ipi_rxproc_thread_data;
+K_THREAD_STACK_DEFINE(ipi_rxproc_thread_stack, 2048);
+
+static void ipi_timer_func(struct k_timer *timer_id){
+	gpio_pin_toggle(gpio_dev, 4);
 }
 
+K_TIMER_DEFINE(ipi_timer, ipi_timer_func, NULL);
+K_MUTEX_DEFINE(ipi_mutex);
+K_SEM_DEFINE(ipi_sem, 0, 1);
+
+
+
 static struct spi_config ipi_spi_config;
-struct SPIS_tuMOSI spi_rx_buf;
-struct SPIS_tuMISO spi_tx_buf;
+struct SPIS_tuMOSI spi_rx_buf[2];
+struct SPIS_tuMISO spi_tx_buf[2];
 static const struct spi_buf spi_tx_buf_pack[SPI_DMA_OP_CNT] = {
-        {.buf = spi_tx_buf.spi_dma_block, .len = SPI_TRANSFER_SIZE},
+        {.buf = spi_tx_buf[0].spi_dma_block, .len = SPI_TRANSFER_SIZE},
 };
 static const struct spi_buf spi_rx_buf_pack[SPI_DMA_OP_CNT] = {
-        {.buf = spi_rx_buf.spi_dma_block, .len = SPI_TRANSFER_SIZE},
+        {.buf = spi_rx_buf[0].spi_dma_block, .len = SPI_TRANSFER_SIZE},
 };
 
 static const struct spi_buf_set spi_tx_buf_set_pack = {
@@ -55,9 +56,10 @@ static const struct spi_buf_set spi_rx_buf_set_pack = {
         .count = SPI_DMA_OP_CNT,  /* must be set to 1 otherwise the Nordic SPI driver will reject it  */
 };
 
-static void ipi_thread_func(void*, void*, void*) {
 
-	uint32_t num_msg_sent = 0;
+
+static void ipi_transceive_thread_func(void*, void*, void*) {
+
 	int rc;
 
 	if (!device_is_ready(gpio_dev)) {
@@ -72,14 +74,26 @@ static void ipi_thread_func(void*, void*, void*) {
 	}
 
 	// Start timer
-	k_timer_start(&ipi_timer, K_SECONDS(1), K_SECONDS(1));
+	k_timer_start(&ipi_timer, K_MSEC(500), K_MSEC(500));
 
 	while (true) {
 
-		// block until timer expires
-		k_timer_status_sync(&ipi_timer);
+		// Update checksums on the buffer about to be transmitted
 
-		LOG_INF("IPI thread running ...");
+		// run SPI transaction
+		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the
+		// master that we are ready to receive (The master MCU is looking for a falling edge).
+		// we should be ok setting the RDY pin before calling spi_transceive(), otherwise we
+		// might have to do this in a support thread...
+
+//		spi_transceive(
+//			ipi_spi_dev,
+//			&ipi_spi_config,       // const struct spi_config *config,
+//			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
+//			&spi_rx_buf_set_pack   // const struct spi_buf_set *rx_bufs,
+//		);
+
+		k_sleep(K_MSEC(100));
 
 		// lock mutex to protect IPI buffers
 		k_mutex_lock(&ipi_mutex, K_FOREVER);
@@ -91,39 +105,26 @@ static void ipi_thread_func(void*, void*, void*) {
 		// transmitted. At least for all the digital or analog input this is ... CAN messages
 		// should be cleared out.
 
-		// Update checksums on the buffer about to be transmitted
-
 		// unlock mutex - free to write to the 'fresh' buffer while the other one is being
 		// transmitted
 		k_mutex_unlock(&ipi_mutex);
 
-		// run SPI transaction
-		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the
-		// master that we are ready to receive (The master MCU is looking for a falling edge).
-		// So therefore we set up the SPI Slave (async mode) and then set SPI_ready
-		LOG_DBG("activating P0.4");
-//		spi_transceive_cb(
-//			ipi_spi_dev,
-//			&ipi_spi_config,       // const struct spi_config *config,
-//			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
-//			&spi_rx_buf_set_pack,  // const struct spi_buf_set *rx_bufs,
-//			&spi_callback,         // spi_callback_t callback,
-//			NULL                   // void *userdata
-//		);
-		gpio_pin_set(gpio_dev, 4, 0);
+		// signal the rx processing task that new data is available for processing
+		k_sem_give(&ipi_sem);
 
-		k_sleep(K_MSEC(5));
 
-		// after reception is complete reset the SPI_ready signal
-		LOG_DBG("de-activating P0.4");
-		gpio_pin_set(gpio_dev, 4, 1);
+		// check the interval between this and previous transceive.
+		// Issue a warning if interval too large
 
-		// process the newly received data ...
-		// for digital and analog inputs we compare the previous with the newly received
-		// buffer. If different send a change notification to the host.
+	}
+}
 
-		// for CAN we just have to test newly received buffer for valid CAN message content.
-		// If found send a 'can msg received' notification to the host.
+static void ipi_rxproc_thread_func(void*, void*, void*) {
+
+	uint32_t num_msg_sent = 0;
+
+	while(true){
+		k_sem_take(&ipi_sem, K_FOREVER);
 
 		char msg[100] = {0};
 		snprintf(msg, sizeof(msg), "CAN Message Received %d", num_msg_sent);
@@ -138,10 +139,18 @@ static void ipi_thread_func(void*, void*, void*) {
 int ipi_init(void){
 
 	k_thread_create(
-		&ipi_thread_data,
-		ipi_thread_stack,
-		K_THREAD_STACK_SIZEOF(ipi_thread_stack),
-		ipi_thread_func, NULL, NULL, NULL,
+		&ipi_transceive_thread_data,
+		ipi_transceive_thread_stack,
+		K_THREAD_STACK_SIZEOF(ipi_transceive_thread_stack),
+		ipi_transceive_thread_func, NULL, NULL, NULL,
+		2, 0, K_NO_WAIT
+	);
+
+	k_thread_create(
+		&ipi_rxproc_thread_data,
+		ipi_rxproc_thread_stack,
+		K_THREAD_STACK_SIZEOF(ipi_rxproc_thread_stack),
+		ipi_rxproc_thread_func, NULL, NULL, NULL,
 		2, 0, K_NO_WAIT
 	);
 
