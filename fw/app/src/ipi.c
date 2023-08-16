@@ -19,7 +19,7 @@ K_THREAD_STACK_DEFINE(ipi_thread_stack, 2048);
 
 K_TIMER_DEFINE(ipi_timer, NULL, NULL);
 K_MUTEX_DEFINE(ipi_mutex);
-clear
+
 const struct device *ipi_spi_dev;
 const struct device *gpio_dev = DEVICE_DT_GET(MY_GPIO);
 
@@ -55,19 +55,19 @@ static void ipi_thread_func(void*, void*, void*) {
 
 		// Switch IPI buffers
 
-		// copy TX data buffer 
+		// copy TX data buffer
 		// we want to start the 'fresh' buffer with the same state as the one about to be
 		// transmitted. At least for all the digital or analog input this is ... CAN messages
 		// should be cleared out.
 
 		// Update checksums on the buffer about to be transmitted
 
-		// unlock mutex - free to write to the 'fresh' buffer while the other one is being 
+		// unlock mutex - free to write to the 'fresh' buffer while the other one is being
 		// transmitted
 		k_mutex_unlock(&ipi_mutex);
 
 		// run SPI transaction
-		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the 
+		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the
 		// master that we are ready to receive. So therefore we set SPI_ready and then run
 		// spi_transceive()
 		LOG_DBG("activating P0.4");
@@ -80,7 +80,7 @@ static void ipi_thread_func(void*, void*, void*) {
 		gpio_pin_set(gpio_dev, 4, 0);
 
 		// process the newly received data ...
-		// for digital and analog inputs we compare the previous with the newly received 
+		// for digital and analog inputs we compare the previous with the newly received
 		// buffer. If different send a change notification to the host.
 
 		// for CAN we just have to test newly received buffer for valid CAN message content.
@@ -113,7 +113,7 @@ int ipi_init(void){
 int ipi_send_can_msg(void){
 
 	int status = -EBUSY;
-	
+
 	k_mutex_lock(&ipi_mutex, K_FOREVER);
 
 	// Interate  over the CAN message slots in the IPI data structure of the currently
