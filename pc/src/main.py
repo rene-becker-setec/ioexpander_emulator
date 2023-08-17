@@ -44,6 +44,7 @@ if __name__ == '__main__':
 
         def canMsgRcvd(self, canMsg):
             LOGGER.info(f'CAN Message received {canMsg}')
+            LOGGER.info(f'CAN Message received {canMsg.id:08x}')
 
 
     handler = Emu2PcHandler()
@@ -67,15 +68,15 @@ if __name__ == '__main__':
 
     client = pc2emu.client.IoExpanderEmulatorClient(client_mngr)
 
-    LOGGER.info('Sending first message ...')
-    response = client.sendCanMsg(b'hello world')
-    LOGGER.info(f'received: {response}')
+#    LOGGER.info('Sending first message ...')
+#    response = client.sendCanMsg(b'hello world')
+#    LOGGER.info(f'received: {response}')
 
     for i in range(10):
         sleep_duration = random.randint(1, 50)/10
         LOGGER.info(f'Sleeping for {sleep_duration} seconds')
         time.sleep(sleep_duration)
-        response = client.sendCanMsg(f'Injecting {i}'.encode())
+        response = client.sendCanMsg(pc2emu.common.rvc_msg_t(0xbeefabcd, [1, 2, 3, 4, 5, 6, 7, i]))
         LOGGER.info(f'server responded with {response}')
 
     LOGGER.info("Done")

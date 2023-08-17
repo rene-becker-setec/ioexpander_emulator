@@ -1,6 +1,16 @@
 /*! Define the project name, which is also the prefix of all generated source code files */
 program ioxp
 
+enum status_t {
+  SUCCESS = 0,
+  ERROR
+}
+
+struct rvc_msg_t {
+    uint32 id;
+    list<uint8> data @max_length(8);
+}
+
 // Note that by using @group() the interfaces can be split over different files when
 // generating. This way we on the Emulator side can only include the 'pc2emu' files when
 // building which means we don't have to implement server method 'canMsgRcvd()' on the
@@ -9,11 +19,11 @@ program ioxp
 //! Calls PC -> IoExpanderEmulator
 @group("pc2emu")
 interface IoExpanderEmulator {
-    sendCanMsg(binary txInput) -> binary
+    sendCanMsg(rvc_msg_t canMsg) -> status_t
 }
 
 // Asynchronous events IoExpanderEmulator -> PC
 @group("emu2pc")
 interface IoExpanderEmulatorAsync {
-  oneway canMsgRcvd(binary canMsg)
+  oneway canMsgRcvd(rvc_msg_t canMsg)
 }
