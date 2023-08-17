@@ -47,7 +47,7 @@ status_t sendCanMsg(const rvc_msg_t * txInput){
 	char* ep = wp + sizeof(temp_buff);
 	wp = wp + snprintf(wp, ep - wp,"0x%08x - ", txInput->id);
 	for(uint8_t i=0; i < 8; i++){
-	 	wp = wp + snprintf(wp, ep - wp,"0x%02x ", txInput->data.elements[i]);
+	 	wp = wp + snprintf(wp, ep - wp,"0x%02x ", txInput->data[i]);
 	}
 	*wp = '\0';
 

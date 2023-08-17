@@ -8,7 +8,7 @@ enum status_t {
 
 struct rvc_msg_t {
     uint32 id;
-    list<uint8> data @max_length(8);
+    uint8[8] data;
 }
 
 // Note that by using @group() the interfaces can be split over different files when

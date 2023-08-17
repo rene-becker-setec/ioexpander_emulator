@@ -126,9 +126,9 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
 	while(true){
 		k_sem_take(&ipi_sem, K_FOREVER);
 
-		char msg[9] = {0};
-		snprintf(msg, sizeof(msg), "M %d", num_msg_sent);
-		rvc_msg_t m = {.id = 0xdeadbeef, .data = {.elements = (uint8_t*)msg, .elementsCount = 8}};
+		rvc_msg_t m = {.id = 0xdeadbeef, .data = {0}};
+		snprintf(m.data, sizeof(m.data), "M %d", num_msg_sent);
+
 		/* RPC call */
 		canMsgRcvd(&m);
 		LOG_INF("send CAN Notification ...");

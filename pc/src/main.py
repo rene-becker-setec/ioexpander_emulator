@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
         def canMsgRcvd(self, canMsg):
             LOGGER.info(f'CAN Message received {canMsg}')
-            LOGGER.info(f'CAN Message received {canMsg.id:08x}')
+            LOGGER.info(f'CAN Message received {canMsg.id:08x} - {canMsg.data} ({bytes(canMsg.data)})')
 
 
     handler = Emu2PcHandler()
