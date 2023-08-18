@@ -134,8 +134,12 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		// we want to start the 'fresh' buffer with the same state as the one about to be
 		// transmitted. At least for all the digital or analog input this is ... CAN messages
 		// should be cleared out.
-
-
+		memcpy(
+			&inactive_tx_buffer->spi_dma_block,
+			&active_tx_buffer->spi_dma_block,
+			sizeof(inactive_tx_buffer->spi_dma_block)
+		);
+		memset(&inactive_tx_buffer->aCANMsg, 0x0, sizeof(inactive_tx_buffer->aCANMsg));
 
 		// unlock mutex - free to write to the 'fresh' buffer while the other one is being
 		// transmitted
@@ -144,10 +148,9 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		// signal the rx processing task that new data is available for processing
 		k_sem_give(&ipi_sem);
 
-
 		// check the interval between this and previous transceive.
 		// Issue a warning if interval too large
-
+		// TODO:
 	}
 }
 
@@ -211,7 +214,7 @@ int ipi_init(void){
 }
 
 
-int ipi_send_can_msg(void){
+int ipi_send_can_msg(const rvc_msg_t *msg){
 
 	int status = -EBUSY;
 
@@ -220,8 +223,16 @@ int ipi_send_can_msg(void){
 	// Interate  over the CAN message slots in the IPI data structure of the currently
 	// writable buffer and see whether there's a free slot available.
 	// If so load message data into this slot. If not we'll return -EBUSY
-	for (int i = 0; i < 4; i++){
-		if(true) {
+	for (int i = 0; i < SPIS_nCANMsgTX; i++){
+		if (inactive_tx_buffer->aCANMsg[i].u16ID28_16 == 0x0) {
+			memcpy(
+				&inactive_tx_buffer->aCANMsg[i].id.canid, &msg->id,
+				sizeof(inactive_tx_buffer->aCANMsg[i].id.canid)
+			);
+			memcpy(
+				&inactive_tx_buffer->aCANMsg[i].u8Data, &msg->data,
+				sizeof(inactive_tx_buffer->aCANMsg[i].u8Data)
+			);
 			status = 0;
 		}
 	}
