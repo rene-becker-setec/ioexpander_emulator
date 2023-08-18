@@ -9,6 +9,8 @@
 
 #include "rvmn_spi.h"
 
+#define IPI_VERSION(major, minor, patch) ((0x0FU & major) << 12 | (0x0FU & minor) << 8 | (0xFFU & patch))
+
 #define GPIO_NAME "GPIO_0"
 #define SPI_RDY_PIN 11
 
@@ -64,6 +66,26 @@ static struct SPIS_tuMOSI* inactive_rx_buffer = &spi_rx_buf[1];
 static struct SPIS_tuMISO* active_tx_buffer = &spi_tx_buf[0];
 static struct SPIS_tuMISO* inactive_tx_buffer = &spi_tx_buf[1];
 
+/**
+ * @brief Calculates 32-bit checksum
+ *
+ * @param data pointer to data block checksum shall be calculated over
+ * @param len  number of 32bit words checksum shall be calculated over
+ * @return uint32_t
+ */
+static uint32_t u32CalculateCS(const uint32_t *data, uint16_t len)
+{
+         uint32_t checksum = 0x00000000;
+
+         for (uint16_t i = 0; i < len; i++) {
+                 checksum += *data;
+                 data++;
+         }
+
+         return checksum;
+}
+
+
 static void ipi_transceive_thread_func(void*, void*, void*) {
 
 	int rc;
@@ -91,7 +113,32 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
     ipi_spi_config.operation = (SPI_OP_MODE_SLAVE | SPI_WORD_SET(8));
     ipi_spi_config.slave = 1U;
 
-	memset(spi_tx_buf[0].spi_dma_block, 0xaa, sizeof(spi_tx_buf[0].spi_dma_block));
+	memset(active_tx_buffer->spi_dma_block, 0x00, sizeof(active_tx_buffer->spi_dma_block));
+
+	// Initilaize the TX IPI structure currently active with sensible defaults ...
+	active_tx_buffer->u16PSinfo          = IPI_VERSION(1, 0, 0); 	// IPI version
+    active_tx_buffer->u16SwVer           = IPI_VERSION(0, 3, 0);    // Simulate NXP software version
+    active_tx_buffer->u16VBATT_MON       = 0x848;
+    active_tx_buffer->u16VCC_Switched    = 0x91c;
+    active_tx_buffer->u16DETECT_VHBRIDGE = 0;
+	active_tx_buffer->u16SysInfoReserved = 0;
+    active_tx_buffer->ign_mon_adc        = 0;
+
+	active_tx_buffer->IO.u16Inp_1[ 0] = 0x803e;
+    active_tx_buffer->IO.u16Inp_1[ 1] = 0x8068;
+    active_tx_buffer->IO.u16Inp_1[ 2] = 0x8068;
+    active_tx_buffer->IO.u16Inp_1[ 3] = 0x8110;
+    active_tx_buffer->IO.u16Inp_1[ 4] = 0x80bc;
+    active_tx_buffer->IO.u16Inp_1[ 5] = 0x80e6;
+    active_tx_buffer->IO.u16Inp_1[ 6] = 0x0;
+    active_tx_buffer->IO.u16Inp_1[ 7] = 0x00;
+    active_tx_buffer->IO.u16Inp_1[ 8] = 0x99c2;
+    active_tx_buffer->IO.u16Inp_1[ 9] = 0x99b4;
+    active_tx_buffer->IO.u16Inp_1[10] = 0x99c8;
+    active_tx_buffer->IO.u16Inp_1[11] = 0x9a0b;
+    active_tx_buffer->IO.u16Inp_1[12] = 0x862c;
+    active_tx_buffer->IO.u16Inp_1[13] = 0x85ac;
+
 
 	// Start timer - this will start toggling the SPI Ready signal
 	k_timer_start(&ipi_timer, K_MSEC(10), K_MSEC(10));
@@ -99,6 +146,11 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 	while (true) {
 
 		// Update checksums on the buffer about to be transmitted
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+		active_tx_buffer->u32CSinfo = u32CalculateCS((uint32_t *)&active_tx_buffer->u16PSinfo, 2);
+		#pragma GCC diagnostic pop
+		active_tx_buffer->u32CS = u32CalculateCS((uint32_t*)&active_tx_buffer, sizeof(active_tx_buffer)/4 - 1);
 
 		// run SPI transaction
 		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the
@@ -223,7 +275,7 @@ int ipi_send_can_msg(const rvc_msg_t *msg){
 	// Interate  over the CAN message slots in the IPI data structure of the currently
 	// writable buffer and see whether there's a free slot available.
 	// If so load message data into this slot. If not we'll return -EBUSY
-	for (int i = 0; i < SPIS_nCANMsgTX; i++){
+	for (int i = 0; i < SPIS_nCANMsgRX; i++){
 		if (inactive_tx_buffer->aCANMsg[i].u16ID28_16 == 0x0) {
 			memcpy(
 				&inactive_tx_buffer->aCANMsg[i].id.canid, &msg->id,

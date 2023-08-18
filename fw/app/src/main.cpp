@@ -40,6 +40,7 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 
 status_t sendCanMsg(const rvc_msg_t * txInput){
 
+	int rc;
 	status_t status = ERROR;
 
 	char temp_buff[256];
@@ -53,7 +54,10 @@ status_t sendCanMsg(const rvc_msg_t * txInput){
 
 	LOG_DBG("Sending: %s", temp_buff);
 
-	ipi_send_can_msg(txInput);
+	rc = ipi_send_can_msg(txInput);
+	if (rc == 0) {
+		status = SUCCESS;
+	}
 	return status;
 }
 
@@ -99,6 +103,9 @@ int main(void)
 	erpc_mbf_t message_buffer_factory = erpc_mbf_dynamic_init();
 
 	erpc_client_t client = erpc_arbitrated_client_init(transport, message_buffer_factory, &arbitrated_transport);
+	if (client == NULL) {
+		LOG_ERR("Failed to initialize eRPC arbitrated client");
+	}
 
 	LOG_INF("Setting up server ...");
 	auto server = erpc_server_init(arbitrated_transport, message_buffer_factory);

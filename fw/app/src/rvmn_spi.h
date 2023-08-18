@@ -257,10 +257,4 @@ extern SPIS_tuMISO SPIS_stuSData; // Data from Slave
 /* Global spi semaphore */
 extern struct k_sem g_spi_sem;
 
-
-int 		iSpi_init(void);
-uint32_t 	u32CalculateCS(const uint32_t *data, uint16_t len);
-int RVM_spi_transceive(void);
-uint16_t rvmn_spi_get_ps_info(void);
-
 #endif // #ifndef RVMN_SPI_H
