@@ -22,6 +22,14 @@ logging.basicConfig(
 
 LOGGER = logging.getLogger(__name__)
 
+class RVCMsgId:
+    def __init__(self, canid):
+        self.sa = (canid & 0xFF)
+        self.dgn = (canid >> 8) & 0x3FFFF
+        self.pri = (canid >> 26) & 0x07
+    def __str__(self):
+        return f'SA:0x{self.sa:02x} - DGN:0x{self.dgn:03x} - PRI:{self.pri}'
+
 
 if __name__ == '__main__':
 
@@ -44,7 +52,8 @@ if __name__ == '__main__':
 
         def canMsgRcvd(self, canMsg):
             data_formatted = ["0x%02x" % b for b in canMsg.data]
-            LOGGER.info(f'CAN Message received 0x{canMsg.id:08x} - {data_formatted}')
+            canID = RVCMsgId(canMsg.id)
+            LOGGER.info(f'CAN Message received 0x{canMsg.id:08x} ({canID})  - {data_formatted}')
 
 
     handler = Emu2PcHandler()

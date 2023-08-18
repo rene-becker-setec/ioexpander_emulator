@@ -36,15 +36,17 @@ K_TIMER_DEFINE(ipi_timer, ipi_timer_func, NULL);
 K_MUTEX_DEFINE(ipi_mutex);
 K_SEM_DEFINE(ipi_sem, 0, 1);
 
+// The active buffer is the one being set up for transceive.
+// The other one (passive) is the one that the host can write to ...
 static uint8_t ipi_active_buffer = 0;
 
 static struct spi_config ipi_spi_config;
 struct SPIS_tuMOSI spi_rx_buf[2];
 struct SPIS_tuMISO spi_tx_buf[2];
-static const struct spi_buf spi_tx_buf_pack[SPI_DMA_OP_CNT] = {
+static struct spi_buf spi_tx_buf_pack[SPI_DMA_OP_CNT] = {
         {.buf = spi_tx_buf[0].spi_dma_block, .len = SPI_TRANSFER_SIZE},
 };
-static const struct spi_buf spi_rx_buf_pack[SPI_DMA_OP_CNT] = {
+static struct spi_buf spi_rx_buf_pack[SPI_DMA_OP_CNT] = {
         {.buf = spi_rx_buf[0].spi_dma_block, .len = SPI_TRANSFER_SIZE},
 };
 
@@ -104,7 +106,7 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
 			&spi_rx_buf_set_pack   // const struct spi_buf_set *rx_bufs,
 		);
-		LOG_DBG("SPI trcv complete ...");
+//		LOG_DBG("SPI trcv complete ...");
 //		k_sleep(K_MSEC(100));
 
 		// lock mutex to protect IPI buffers
@@ -122,6 +124,10 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 				LOG_ERR("ipi_active_buffer value not valid");
 				return;
 		}
+
+		spi_tx_buf_pack[0].buf = spi_tx_buf[ipi_active_buffer].spi_dma_block;
+		spi_rx_buf_pack[0].buf = spi_rx_buf[ipi_active_buffer].spi_dma_block;
+
 
 		// copy TX data buffer
 		// we want to start the 'fresh' buffer with the same state as the one about to be
@@ -148,16 +154,26 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
 	while(true){
 		k_sem_take(&ipi_sem, K_FOREVER);
 
+		uint8_t buff_id = ipi_active_buffer == 0x01 ? 0x00 : 0x01;
+		// LOG_DBG("Buffer ID: %d", buff_id);
+
 		// TODO: validate IPI frame checksum
 
 		// Extract CAN Messages ...
 		for (int i=0; i<SPIS_nCANMsgTX; i++){
-			if (spi_rx_buf[0].aCANMsg[i].u16ID28_16 & 0x8000) {
+			if (spi_rx_buf[buff_id].aCANMsg[i].u16ID28_16 & 0x8000) {
+
+				LOG_DBG(
+					"SA: 0x%02x, DGN: 0x%03x, PRI: 0x%x",
+					spi_rx_buf[buff_id].aCANMsg[i].id.sa,
+					spi_rx_buf[buff_id].aCANMsg[i].id.dgn,
+					spi_rx_buf[buff_id].aCANMsg[i].id.pri
+				);
 
 				// TODO: validate checksum
 
 				rvc_msg_t m;
-				memcpy(&m.id,spi_rx_buf[0].aCANMsg[i].u8Data, sizeof(m.id));
+				memcpy(&m.id,spi_rx_buf[buff_id].aCANMsg[i].id.canid, sizeof(m.id));
 				// bits 15:13 are control bits for the IPI trasnmission, don't belong
 				// to RV-C.
 				// [15] = Message valid bit, set to 1.
@@ -165,7 +181,7 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
                 // [13] = 1 for TX (0 for RX)
 				// mask those out ....
 				m.id &= 0x1fffffff;
-				memcpy(m.data,spi_rx_buf[0].aCANMsg[i].u8Data, sizeof(m.data));
+				memcpy(m.data,spi_rx_buf[buff_id].aCANMsg[i].u8Data, sizeof(m.data));
 				LOG_DBG("tx can msg to host");
 				canMsgRcvd(&m);
 			}
