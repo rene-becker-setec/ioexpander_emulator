@@ -36,9 +36,6 @@ K_TIMER_DEFINE(ipi_timer, ipi_timer_func, NULL);
 K_MUTEX_DEFINE(ipi_mutex);
 K_SEM_DEFINE(ipi_sem, 0, 1);
 
-// The active buffer is the one being set up for transceive.
-// The other one (passive) is the one that the host can write to ...
-static uint8_t ipi_active_buffer = 0;
 
 static struct spi_config ipi_spi_config;
 struct SPIS_tuMOSI spi_rx_buf[2];
@@ -59,11 +56,20 @@ static const struct spi_buf_set spi_rx_buf_set_pack = {
         .count = SPI_DMA_OP_CNT,  /* must be set to 1 otherwise the Nordic SPI driver will reject it  */
 };
 
-
+// 'active' buffers are those allocated for SPI transceive, the
+// 'inactive' those that can be written to from host/data is processed from for
+// upload to host
+static struct SPIS_tuMOSI* active_rx_buffer = &spi_rx_buf[0];
+static struct SPIS_tuMOSI* inactive_rx_buffer = &spi_rx_buf[1];
+static struct SPIS_tuMISO* active_tx_buffer = &spi_tx_buf[0];
+static struct SPIS_tuMISO* inactive_tx_buffer = &spi_tx_buf[1];
 
 static void ipi_transceive_thread_func(void*, void*, void*) {
 
 	int rc;
+	struct SPIS_tuMOSI* tmp_rx_buffer; // this one is for when swapping active/passive
+	struct SPIS_tuMISO* tmp_tx_buffer; // this one is for when swapping active/passive
+
 
 	if (!device_is_ready(gpio_dev)) {
         /* Not ready, do not use */
@@ -113,26 +119,23 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		k_mutex_lock(&ipi_mutex, K_FOREVER);
 
 		// Switch IPI buffers
-		switch (ipi_active_buffer) {
-			case 0x01:
-				ipi_active_buffer = 0x00;
-				break;
-			case 0x00:
-				ipi_active_buffer = 0x01;
-				break;
-			default:
-				LOG_ERR("ipi_active_buffer value not valid");
-				return;
-		}
+		tmp_rx_buffer = active_rx_buffer;
+		active_rx_buffer = inactive_rx_buffer;
+		inactive_rx_buffer = tmp_rx_buffer;
 
-		spi_tx_buf_pack[0].buf = spi_tx_buf[ipi_active_buffer].spi_dma_block;
-		spi_rx_buf_pack[0].buf = spi_rx_buf[ipi_active_buffer].spi_dma_block;
+		tmp_tx_buffer = active_tx_buffer;
+		active_tx_buffer = inactive_tx_buffer;
+		inactive_tx_buffer = tmp_tx_buffer;
 
+		spi_tx_buf_pack[0].buf = active_tx_buffer->spi_dma_block;
+		spi_rx_buf_pack[0].buf = active_rx_buffer->spi_dma_block;
 
 		// copy TX data buffer
 		// we want to start the 'fresh' buffer with the same state as the one about to be
 		// transmitted. At least for all the digital or analog input this is ... CAN messages
 		// should be cleared out.
+
+
 
 		// unlock mutex - free to write to the 'fresh' buffer while the other one is being
 		// transmitted
@@ -154,26 +157,23 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
 	while(true){
 		k_sem_take(&ipi_sem, K_FOREVER);
 
-		uint8_t buff_id = ipi_active_buffer == 0x01 ? 0x00 : 0x01;
-		// LOG_DBG("Buffer ID: %d", buff_id);
-
 		// TODO: validate IPI frame checksum
 
 		// Extract CAN Messages ...
 		for (int i=0; i<SPIS_nCANMsgTX; i++){
-			if (spi_rx_buf[buff_id].aCANMsg[i].u16ID28_16 & 0x8000) {
+			if (inactive_rx_buffer->aCANMsg[i].u16ID28_16 & 0x8000) {
 
 				LOG_DBG(
 					"SA: 0x%02x, DGN: 0x%03x, PRI: 0x%x",
-					spi_rx_buf[buff_id].aCANMsg[i].id.sa,
-					spi_rx_buf[buff_id].aCANMsg[i].id.dgn,
-					spi_rx_buf[buff_id].aCANMsg[i].id.pri
+					inactive_rx_buffer->aCANMsg[i].id.sa,
+					inactive_rx_buffer->aCANMsg[i].id.dgn,
+					inactive_rx_buffer->aCANMsg[i].id.pri
 				);
 
 				// TODO: validate checksum
 
 				rvc_msg_t m;
-				memcpy(&m.id,spi_rx_buf[buff_id].aCANMsg[i].id.canid, sizeof(m.id));
+				memcpy(&m.id, inactive_rx_buffer->aCANMsg[i].id.canid, sizeof(m.id));
 				// bits 15:13 are control bits for the IPI trasnmission, don't belong
 				// to RV-C.
 				// [15] = Message valid bit, set to 1.
@@ -181,7 +181,7 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
                 // [13] = 1 for TX (0 for RX)
 				// mask those out ....
 				m.id &= 0x1fffffff;
-				memcpy(m.data,spi_rx_buf[buff_id].aCANMsg[i].u8Data, sizeof(m.data));
+				memcpy(m.data, inactive_rx_buffer->aCANMsg[i].u8Data, sizeof(m.data));
 				LOG_DBG("tx can msg to host");
 				canMsgRcvd(&m);
 			}
