@@ -10,6 +10,7 @@
 #include "rvmn_spi.h"
 
 #define GPIO_NAME "GPIO_0"
+#define SPI_RDY_PIN 11
 
 #define MY_GPIO DT_NODELABEL(gpio0)
 
@@ -28,14 +29,14 @@ struct k_thread ipi_rxproc_thread_data;
 K_THREAD_STACK_DEFINE(ipi_rxproc_thread_stack, 2048);
 
 static void ipi_timer_func(struct k_timer *timer_id){
-	gpio_pin_toggle(gpio_dev, 4);
+	gpio_pin_toggle(gpio_dev, SPI_RDY_PIN);
 }
 
 K_TIMER_DEFINE(ipi_timer, ipi_timer_func, NULL);
 K_MUTEX_DEFINE(ipi_mutex);
 K_SEM_DEFINE(ipi_sem, 0, 1);
 
-
+static uint8_t ipi_active_buffer = 0;
 
 static struct spi_config ipi_spi_config;
 struct SPIS_tuMOSI spi_rx_buf[2];
@@ -67,14 +68,25 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		LOG_ERR("GPIO Port is not ready ...");
         return;
 	}
-	rc = gpio_pin_configure(gpio_dev, 4, GPIO_OUTPUT_ACTIVE);
+	rc = gpio_pin_configure(gpio_dev, SPI_RDY_PIN, GPIO_OUTPUT_ACTIVE);
 	if (rc != 0){
 		LOG_ERR("Configuring SPI Ready pin failed");
 		return;
 	}
 
-	// Start timer
-	k_timer_start(&ipi_timer, K_MSEC(500), K_MSEC(500));
+	if (!device_is_ready(ipi_spi_dev)) {
+		LOG_ERR("SPI device is not ready ...");
+		return;
+	}
+
+	ipi_spi_config.frequency = SPI_FREQUENCY;
+    ipi_spi_config.operation = (SPI_OP_MODE_SLAVE | SPI_WORD_SET(8));
+    ipi_spi_config.slave = 1U;
+
+	memset(spi_tx_buf[0].spi_dma_block, 0xaa, sizeof(spi_tx_buf[0].spi_dma_block));
+
+	// Start timer - this will start toggling the SPI Ready signal
+	k_timer_start(&ipi_timer, K_MSEC(10), K_MSEC(10));
 
 	while (true) {
 
@@ -86,19 +98,30 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		// we should be ok setting the RDY pin before calling spi_transceive(), otherwise we
 		// might have to do this in a support thread...
 
-//		spi_transceive(
-//			ipi_spi_dev,
-//			&ipi_spi_config,       // const struct spi_config *config,
-//			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
-//			&spi_rx_buf_set_pack   // const struct spi_buf_set *rx_bufs,
-//		);
-
-		k_sleep(K_MSEC(100));
+		spi_transceive(
+			ipi_spi_dev,
+			&ipi_spi_config,       // const struct spi_config *config,
+			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
+			&spi_rx_buf_set_pack   // const struct spi_buf_set *rx_bufs,
+		);
+		LOG_DBG("SPI trcv complete ...");
+//		k_sleep(K_MSEC(100));
 
 		// lock mutex to protect IPI buffers
 		k_mutex_lock(&ipi_mutex, K_FOREVER);
 
 		// Switch IPI buffers
+		switch (ipi_active_buffer) {
+			case 0x01:
+				ipi_active_buffer = 0x00;
+				break;
+			case 0x00:
+				ipi_active_buffer = 0x01;
+				break;
+			default:
+				LOG_ERR("ipi_active_buffer value not valid");
+				return;
+		}
 
 		// copy TX data buffer
 		// we want to start the 'fresh' buffer with the same state as the one about to be
@@ -121,18 +144,32 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 
 static void ipi_rxproc_thread_func(void*, void*, void*) {
 
-	uint32_t num_msg_sent = 0;
 
 	while(true){
 		k_sem_take(&ipi_sem, K_FOREVER);
 
-		rvc_msg_t m = {.id = 0xdeadbeef, .data = {0}};
-		snprintf(m.data, sizeof(m.data), "M %d", num_msg_sent);
+		// TODO: validate IPI frame checksum
 
-		/* RPC call */
-		canMsgRcvd(&m);
-		LOG_INF("send CAN Notification ...");
-		num_msg_sent++;
+		// Extract CAN Messages ...
+		for (int i=0; i<SPIS_nCANMsgTX; i++){
+			if (spi_rx_buf[0].aCANMsg[i].u16ID28_16 & 0x8000) {
+
+				// TODO: validate checksum
+
+				rvc_msg_t m;
+				memcpy(&m.id,spi_rx_buf[0].aCANMsg[i].u8Data, sizeof(m.id));
+				// bits 15:13 are control bits for the IPI trasnmission, don't belong
+				// to RV-C.
+				// [15] = Message valid bit, set to 1.
+                // [14] = Extended ID bit, set to 1
+                // [13] = 1 for TX (0 for RX)
+				// mask those out ....
+				m.id &= 0x1fffffff;
+				memcpy(m.data,spi_rx_buf[0].aCANMsg[i].u8Data, sizeof(m.data));
+				LOG_DBG("tx can msg to host");
+				canMsgRcvd(&m);
+			}
+		}
 	}
 }
 
