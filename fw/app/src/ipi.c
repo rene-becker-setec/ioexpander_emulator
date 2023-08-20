@@ -71,20 +71,37 @@ static struct SPIS_tuMISO* inactive_tx_buffer = &spi_tx_buf[1];
  *
  * @param data pointer to data block checksum shall be calculated over
  * @param len  number of 32bit words checksum shall be calculated over
- * @return uint32_t
+ * @return uint32_t the calculated checksum
  */
-static uint32_t u32CalculateCS(const uint32_t *data, uint16_t len)
-{
-         uint32_t checksum = 0x00000000;
+static uint32_t u32CalculateCS(const uint32_t *data, uint16_t len) {
 
-         for (uint16_t i = 0; i < len; i++) {
-                 checksum += *data;
-                 data++;
-         }
+	uint32_t checksum = 0x00000000;
 
-         return checksum;
+    for (uint16_t i = 0; i < len; i++) {
+        checksum += *data;
+        data++;
+    }
+
+    return checksum;
 }
 
+/**
+ * @brief Calculate 8-bit checksum
+ *
+ * @param data pointer to data block checksum is to be calculated over
+ * @param len number of 8bit words checksum will be calculated over
+ * @return uint8_t the calculated checksum
+ */
+static uint8_t u8CalculateCS(const uint8_t* data, uint16_t len) {
+
+	uint8_t checksum = 0x00;
+	for (uint16_t i = 0; i < len; i++) {
+		checksum += *data;
+		data++;
+	}
+
+	return checksum;
+}
 
 static void ipi_transceive_thread_func(void*, void*, void*) {
 
@@ -139,6 +156,13 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
     active_tx_buffer->IO.u16Inp_1[12] = 0x862c;
     active_tx_buffer->IO.u16Inp_1[13] = 0x85ac;
 
+	memcpy(
+		&inactive_tx_buffer->spi_dma_block,
+		&active_tx_buffer->spi_dma_block,
+		sizeof(inactive_tx_buffer->spi_dma_block)
+	);
+
+	inactive_tx_buffer->u32RollCnt++;
 
 	// Start timer - this will start toggling the SPI Ready signal
 	k_timer_start(&ipi_timer, K_MSEC(10), K_MSEC(10));
@@ -148,7 +172,11 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		// Update checksums on the buffer about to be transmitted
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-		active_tx_buffer->u32CSinfo = u32CalculateCS((uint32_t *)&active_tx_buffer->u16PSinfo, 2);
+		active_tx_buffer->u32CSinfo = u32CalculateCS((uint32_t*)&active_tx_buffer->u16PSinfo, 2);
+		active_tx_buffer->IO.u32CS = u32CalculateCS(
+			(uint32_t*)&active_tx_buffer->IO,
+			sizeof(active_tx_buffer->IO)/4 - 1
+		);
 		#pragma GCC diagnostic pop
 		active_tx_buffer->u32CS = u32CalculateCS((uint32_t*)&active_tx_buffer, sizeof(active_tx_buffer)/4 - 1);
 
@@ -164,8 +192,7 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 			&spi_tx_buf_set_pack,  // const struct spi_buf_set *tx_bufs,
 			&spi_rx_buf_set_pack   // const struct spi_buf_set *rx_bufs,
 		);
-//		LOG_DBG("SPI trcv complete ...");
-//		k_sleep(K_MSEC(100));
+
 
 		// lock mutex to protect IPI buffers
 		k_mutex_lock(&ipi_mutex, K_FOREVER);
@@ -192,6 +219,9 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 			sizeof(inactive_tx_buffer->spi_dma_block)
 		);
 		memset(&inactive_tx_buffer->aCANMsg, 0x0, sizeof(inactive_tx_buffer->aCANMsg));
+
+		// increment the rolling counter
+		inactive_tx_buffer->u32RollCnt++;
 
 		// unlock mutex - free to write to the 'fresh' buffer while the other one is being
 		// transmitted
@@ -285,7 +315,13 @@ int ipi_send_can_msg(const rvc_msg_t *msg){
 				&inactive_tx_buffer->aCANMsg[i].u8Data, &msg->data,
 				sizeof(inactive_tx_buffer->aCANMsg[i].u8Data)
 			);
+			inactive_tx_buffer->aCANMsg[i].u8CS = u8CalculateCS(
+				(uint8_t*) &inactive_tx_buffer->aCANMsg[i],
+				sizeof(inactive_tx_buffer->aCANMsg[i])/4 - 1
+			);
+			inactive_tx_buffer->aCANMsg[i].u8DLC = 8; // DLC is always 8 for RV-C
 			status = 0;
+			break;
 		}
 	}
 
