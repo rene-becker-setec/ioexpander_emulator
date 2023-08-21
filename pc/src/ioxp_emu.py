@@ -6,6 +6,7 @@ import erpc
 import logging
 import time
 import random
+from threading import Lock
 import ioxp.ioxp_pc2emu as pc2emu
 import ioxp.ioxp_emu2pc as emu2pc
 from can.listener import Listener
@@ -18,7 +19,9 @@ LOGGER = logging.getLogger(__name__)
 class IoxpEmu(emu2pc.interface.IIoExpanderEmulatorAsync):
 
     def __init__(self, port: str) -> None:
+
         self._listeners = []
+        self._lock = Lock()
         self._xport = erpc.transport.SerialTransport(port, baudrate=115200)
         self._arbitrator = erpc.arbitrator.TransportArbitrator(
             sharedTransport=self._xport, codec=erpc.basic_codec.BasicCodec()
@@ -36,13 +39,14 @@ class IoxpEmu(emu2pc.interface.IIoExpanderEmulatorAsync):
         msg = RvcMsg(RvcMsgId(can_msg.id), can_msg.data)
         LOGGER.debug(f'CAN Message received {msg}')
         for listener in self._listeners:
-            listener.on_msg_rcvd()
+            listener.on_msg_rcvd(msg)
 
     def add_listener(self, listener: Listener) -> None:
         self._listeners.append(listener)
 
     def send_can_msg(self, msg: RvcMsg) -> int:
-        response = self._client.sendCanMsg(
-            pc2emu.common.rvc_msg_t(msg.id.as_int(), msg.data)
-        )
-        return response
+        with self._lock:
+            response = self._client.sendCanMsg(
+                pc2emu.common.rvc_msg_t(msg.id.as_int(), msg.data)
+            )
+            return response

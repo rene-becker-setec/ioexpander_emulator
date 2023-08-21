@@ -2,7 +2,7 @@
 
 """
 from abc import ABC, abstractmethod
-from rvc import RvcMsg
+from can.rvc import RvcMsg
 
 
 class Listener(ABC):

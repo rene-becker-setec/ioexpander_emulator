@@ -52,7 +52,7 @@ class Rvmc(can.listener.Listener):
             self._rolling_counter += 1
 
     def on_msg_rcvd(self, msg: can.rvc.RvcMsg) -> None:
-        LOGGER.debug(f'Message received: {msg}')
+        LOGGER.debug(f'Message received: {msg} ({msg.id.as_int():08x})')
         if msg.id.as_int() == 0x18EF4454:
             if self._display_state != msg.data[1:3]:
                 LOGGER.debug(f'New Display State: {self._display_state} -> {msg.data[1:3]}')
