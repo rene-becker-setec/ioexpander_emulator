@@ -243,13 +243,15 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
 		k_sem_take(&ipi_sem, K_FOREVER);
 
 		// TODO: validate IPI frame checksum
+		LOG_DBG("starting rx proc");
 
 		// Extract CAN Messages ...
 		for (int i=0; i<SPIS_nCANMsgTX; i++){
 			if (inactive_rx_buffer->aCANMsg[i].u16ID28_16 & 0x8000) {
 
 				LOG_DBG(
-					"SA: 0x%02x, DGN: 0x%03x, PRI: 0x%x",
+					"spi-pos: %d, SA: 0x%02x, DGN: 0x%03x, PRI: 0x%x",
+					i,
 					inactive_rx_buffer->aCANMsg[i].id.sa,
 					inactive_rx_buffer->aCANMsg[i].id.dgn,
 					inactive_rx_buffer->aCANMsg[i].id.pri
@@ -267,7 +269,6 @@ static void ipi_rxproc_thread_func(void*, void*, void*) {
 				// mask those out ....
 				m.id &= 0x1fffffff;
 				memcpy(m.data, inactive_rx_buffer->aCANMsg[i].u8Data, sizeof(m.data));
-				LOG_DBG("tx can msg to host");
 				canMsgRcvd(&m);
 			}
 		}
@@ -307,20 +308,28 @@ int ipi_send_can_msg(const rvc_msg_t *msg){
 	// If so load message data into this slot. If not we'll return -EBUSY
 	for (int i = 0; i < SPIS_nCANMsgRX; i++){
 		if (inactive_tx_buffer->aCANMsg[i].u16ID28_16 == 0x0) {
+
 			memcpy(
 				&inactive_tx_buffer->aCANMsg[i].id.canid, &msg->id,
 				sizeof(inactive_tx_buffer->aCANMsg[i].id.canid)
 			);
+
+			inactive_tx_buffer->aCANMsg[i].u16ID28_16 |= 0x8000;
+
 			memcpy(
 				&inactive_tx_buffer->aCANMsg[i].u8Data, &msg->data,
 				sizeof(inactive_tx_buffer->aCANMsg[i].u8Data)
 			);
+
+			inactive_tx_buffer->aCANMsg[i].u8DLC = 8; // DLC is always 8 for RV-C
+
 			inactive_tx_buffer->aCANMsg[i].u8CS = u8CalculateCS(
 				(uint8_t*) &inactive_tx_buffer->aCANMsg[i],
-				sizeof(inactive_tx_buffer->aCANMsg[i])/4 - 1
+				sizeof(inactive_tx_buffer->aCANMsg[i]) - 1
 			);
-			inactive_tx_buffer->aCANMsg[i].u8DLC = 8; // DLC is always 8 for RV-C
+
 			status = 0;
+
 			break;
 		}
 	}

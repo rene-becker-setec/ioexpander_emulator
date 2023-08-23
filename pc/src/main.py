@@ -27,10 +27,13 @@ if __name__ == '__main__':
 
     ioxp_emu = IoxpEmu(USB_CDC_PORT)
     rvmc = Rvmc(ioxp_emu)
-
-    rvmc.set_pairing_mode()
+    rvmc.start()
 
     time.sleep(10)
 
+#    rvmc.set_pairing_mode()
+
+
+    rvmc.stop()
     LOGGER.info('Done')
 
