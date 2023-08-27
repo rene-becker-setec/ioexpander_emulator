@@ -6,7 +6,7 @@ import time
 from ioxp_emu import IoxpEmu
 from rvmc import Rvmc
 
-#USB_CDC_PORT = '/dev/serial/by-id/usb-ZEPHYR_IOExp_668271B5BCD6B09D-if00'
+# USB_CDC_PORT = '/dev/serial/by-id/usb-ZEPHYR_IOExp_668271B5BCD6B09D-if00'
 USB_CDC_PORT = '/dev/serial/by-id/usb-ZEPHYR_IOExp_6276018CAE49AE37-if00'
 
 logging.basicConfig(
@@ -33,7 +33,5 @@ if __name__ == '__main__':
 
 #    rvmc.set_pairing_mode()
 
-
-    rvmc.stop()
     LOGGER.info('Done')
 

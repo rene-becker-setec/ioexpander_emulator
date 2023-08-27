@@ -28,20 +28,14 @@ class Rvmc(can.listener.Listener):
 
     def start(self):
         self._swst_thread_handle = threading.Thread(target=self._thread_func)
+        self._swst_thread_handle.daemon = True
         self._swst_thread_handle.start()
-
-    def stop(self):
-        if self._swst_thread_handle is None:
-            return
-        self._stop_req.set()
-        self._swst_thread_handle.join()
-        self._swst_thread_handle = None
 
     def _thread_func(self):
         while True:
+            next_iteration_time = time.time() + SWITCH_MSG_DELAY
             if self._stop_req.is_set():
                 break
-            time.sleep(SWITCH_MSG_DELAY)
             with self._data_lock:
                 rvc_payload = self._switch_data + [0xFF, 0x33, self._rolling_counter & 0xFF]
                 rvc_payload += [sum(rvc_payload) & 0xFF]
@@ -52,6 +46,7 @@ class Rvmc(can.listener.Listener):
                 )
                 self._bus.send_can_msg(msg)
                 self._rolling_counter += 1
+            time.sleep(next_iteration_time - time.time())
 
     def increment_menu(self) -> None:
         LOGGER.debug('Incrementing Menu ...')
