@@ -175,10 +175,13 @@ static void ipi_transceive_thread_func(void*, void*, void*) {
 		active_tx_buffer->u32CSinfo = u32CalculateCS((uint32_t*)&active_tx_buffer->u16PSinfo, 2);
 		active_tx_buffer->IO.u32CS = u32CalculateCS(
 			(uint32_t*)&active_tx_buffer->IO,
-			sizeof(active_tx_buffer->IO)/4 - 1
+			sizeof(active_tx_buffer->IO)/sizeof(uint32_t) - 1
 		);
 		#pragma GCC diagnostic pop
-		active_tx_buffer->u32CS = u32CalculateCS((uint32_t*)&active_tx_buffer, sizeof(active_tx_buffer)/4 - 1);
+		active_tx_buffer->u32CS = u32CalculateCS(
+			(uint32_t*)active_tx_buffer,
+			sizeof(*active_tx_buffer)/sizeof(uint32_t) - 1
+		);
 
 		// run SPI transaction
 		// We are SPI Slave, the SPI ready signal (a GPIO) is used to signal to the

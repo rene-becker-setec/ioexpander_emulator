@@ -11,8 +11,16 @@ LOGGER = logging.getLogger(__name__)
 SWITCH_MSG_DELAY = 0.040
 
 
-class Rvmc(can.listener.Listener):
+class RvmcError(Exception):
+    """
 
+    """
+
+
+class Rvmc(can.listener.Listener):
+    """
+
+    """
     def __init__(self, bus: ioxp_emu.IoxpEmu) -> None:
         super().__init__()
         LOGGER.debug('creating RVMC instance ...')
@@ -32,6 +40,7 @@ class Rvmc(can.listener.Listener):
         self._swst_thread_handle.start()
 
     def _thread_func(self):
+        first_iteration = True
         while True:
             next_iteration_time = time.time() + SWITCH_MSG_DELAY
             if self._stop_req.is_set():
@@ -46,23 +55,34 @@ class Rvmc(can.listener.Listener):
                 )
                 self._bus.send_can_msg(msg)
                 self._rolling_counter += 1
-            time.sleep(next_iteration_time - time.time())
+            sleep_duration = next_iteration_time - time.time()
+            # the first iteration of this loop for some reason is slow so that
+            # sleep_duration < 0. Later iterations are no problem ...
+            if sleep_duration > 0:
+                time.sleep(sleep_duration)
+            elif not first_iteration:
+                LOGGER.warning(f'skipping sleep: {next_iteration_time} - {time.time()}')
+            first_iteration = False
 
     def increment_menu(self) -> None:
         LOGGER.debug('Incrementing Menu ...')
-        with self._data_lock, self._api_lock:
-            self._switch_data = [0x00, 0x00, 0x00, 0x40]
+        with self._api_lock:
+            with self._data_lock:
+                self._switch_data = [0x00, 0x00, 0x00, 0x40]
             time.sleep(0.5)
-            self._switch_data = [0x00, 0x00, 0x00, 0x00]
+            with self._data_lock:
+                self._switch_data = [0x00, 0x00, 0x00, 0x00]
             time.sleep(0.5)
         LOGGER.debug('Incrementing Menu ... Done')
 
     def press_extend(self) -> None:
         LOGGER.debug('Pressing EXT ...')
-        with self._data_lock, self._api_lock:
-            self._switch_data = [0x00, 0x10 , 0x00, 0x00]
+        with self._api_lock:
+            with self._data_lock:
+                self._switch_data = [0x00, 0x10 , 0x00, 0x00]
             time.sleep(0.5)
-            self._switch_data = [0x00, 0x10, 0x00, 0x00]
+            with self._data_lock:
+                self._switch_data = [0x00, 0x10, 0x00, 0x00]
             time.sleep(0.5)
         LOGGER.debug('Pressing EXT ... done')
 
@@ -74,11 +94,15 @@ class Rvmc(can.listener.Listener):
             self._display_state = msg.data[1:3]
 
     def set_pairing_mode(self) -> None:
+        iter_count: int = 0
         LOGGER.debug('Starting to set Node into Pairing Mode')
-        while self._display_state != bytearray([0x77, 0x67]):
+        while self._display_state != [0x77, 0x67]:
             LOGGER.debug('Incrementing Menu')
             self.increment_menu()
             time.sleep(1)
+            iter_count += 1
+            if iter_count > 10:
+                raise RvmcError('Could not set node into pairing mode')
         LOGGER.debug('Display should now be showing "PA"')
         self.press_extend()
 
