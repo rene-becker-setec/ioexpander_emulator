@@ -34,12 +34,16 @@ class Rvmc(can.listener.Listener):
         self._stop_req = threading.Event()
         self._swst_thread_handle = None
 
-    def start(self):
+    def start(self) -> None:
         self._swst_thread_handle = threading.Thread(target=self._thread_func)
         self._swst_thread_handle.daemon = True
+        self._stop_req.clear()
         self._swst_thread_handle.start()
 
-    def _thread_func(self):
+    def stop(self) -> None:
+        self._stop_req.set()
+
+    def _thread_func(self) -> None:
         first_iteration = True
         while True:
             next_iteration_time = time.time() + SWITCH_MSG_DELAY
@@ -79,10 +83,10 @@ class Rvmc(can.listener.Listener):
         LOGGER.debug('Pressing EXT ...')
         with self._api_lock:
             with self._data_lock:
-                self._switch_data = [0x00, 0x10 , 0x00, 0x00]
+                self._switch_data = [0x00, 0x10, 0x00, 0x00]
             time.sleep(0.5)
             with self._data_lock:
-                self._switch_data = [0x00, 0x10, 0x00, 0x00]
+                self._switch_data = [0x00, 0x00, 0x00, 0x00]
             time.sleep(0.5)
         LOGGER.debug('Pressing EXT ... done')
 
